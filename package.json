@@ -1,6 +1,6 @@
 {
   "name": "@valen-h/testree",
-  "version": "0.1.0",
+  "version": "0.1.0-0",
   "description": "A pattern testing utility for parsing.",
   "keywords": [
     "test", "regexp", "cli"

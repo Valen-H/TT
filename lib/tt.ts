@@ -2,18 +2,37 @@
 
 export module tt {
 	
+	/**
+	 * Represents Pattern Callback actions returnvalues.
+	 */
 	export enum Act {
-		STOP = 1,
-		CONT = 2,
-		UNREG = 4,
-		PASS = 8,
+		STOP = 1, //stop propagation
+		CONT = 2, //continue propagation - DEFAULT success
+		UNREG = 4, //unregister pattern - to be used in bitmasked conjunction
+		PASS = 8, //continue propagation - DEFAULT failure
 	}
 	
-	export type Callback<T, S = any, U = S> = (t: T, s: S, u: U) => Act;
+	/**
+	 * To be called on Pattern matches.
+	 */
+	export type Callback<T, S = any, U = S> = (t: T, s: S, u: U, ...d: any[]) => Act;
 	
+	/**
+	 * On success executes callback.
+	 */
 	export class Pattern extends RegExp {
 		
+		/**
+		 * Subresource/inner-pattern
+		 */
 		public pattern: RegExp;
+		/**
+		 * 
+		 * @param {Pattern} t - this
+		 * @param {string} str - string matched against
+		 * @param {number} i - index of testing
+		 * @returns {Act} Action outcome
+		 */
 		public cb: Callback<Pattern, string, number> = (t: Pattern, str: string, i?: number): Act => Act.CONT;
 		
 		constructor(pattern: Pattern | RegExp | string, cb?: Callback<Pattern, string, number>) {
@@ -42,18 +61,28 @@ export module tt {
 			return this.pattern.source;
 		} //g-source
 		
+		/**
+		 * Attempt match and callback execution.
+		 * 
+		 * @param {string} str - string matched against
+		 * @param {number} i - index of testing
+		 * @returns {Act} Action outcome - PASS if omitted
+		 */
 		try(str: string, i: number = -1): Act {
 			if (this.pattern.test(str))
 				return this.cb(this, str, i) || Act.CONT;
 			
 			return Act.PASS;
-		} //test
+		} //try
 		
 		[Symbol.match](str: string): RegExpMatchArray {
 			return str.match(this.pattern) || [ ];
 		}
 		[Symbol.matchAll](str: string): IterableIterator<RegExpMatchArray> {
 			return str.matchAll(this.pattern);
+		}
+		[Symbol.search](str: string): number {
+			return str.search(this.pattern);
 		}
 		
 		static get [Symbol.species]() {
@@ -64,13 +93,22 @@ export module tt {
 	
 	export class TT {
 		
-		public patterns: Pattern[];
+		/**
+		 * Patterns in order of calling
+		 */
+		public patterns: Pattern[] = [ ];
 		
 		constructor(patterns: Pattern[] | RegExp[] | string[] = [ ]) {
-			if (patterns instanceof Array) this.patterns = patterns.map((p: Pattern | RegExp | string): Pattern => new Pattern(p));
+			if (patterns instanceof Array) this.reg(patterns);
 			else throw "Bad Patterns";
 		} //ctor
 		
+		/**
+		 * Attempt matching.
+		 * 
+		 * @param {string} str - string matched against
+		 * @returns {boolean} Match success.
+		 */
 		test(str: string): boolean {
 			let ret: boolean = false;
 			
@@ -86,30 +124,35 @@ export module tt {
 			return ret;
 		} //test
 		
-		reg(pat: Pattern[] | RegExp[] | string[] | Pattern | RegExp | string, idx?: number, rep: number = 0): Pattern | Pattern[] {
-			let opat: Pattern | Pattern[];
+		/**
+		 * Register Pattern
+		 * 
+		 * @param pat - pattern to (craft and) register
+		 * @param {number} [idx] - index to append to
+		 * @param {number} [rep=0] - patterns to replace
+		 * @returns {Pattern[]} Patterns added.
+		 */
+		reg(pat: Pattern[] | RegExp[] | string[] | Pattern | RegExp | string, idx?: number, rep: number = 0): Pattern[] {
+			let opat: Pattern[];
 			
 			if (pat instanceof Array) opat = pat.map((p: Pattern | RegExp | string): Pattern => new Pattern(p));
-			else opat = new Pattern(pat);
+			else opat = [new Pattern(pat)];
 			
-			if (opat instanceof Array) {
-				if (idx && idx >= 0) this.patterns.splice(idx, rep, ...opat);
-				else {
-					while (rep--) this.patterns.pop();
-					
-					this.patterns.push(...opat);
-				}
-			} else {
-				if (idx && idx >= 0) this.patterns.splice(idx, rep, opat);
-				else {
-					while (rep--) this.patterns.pop();
-					
-					this.patterns.push(opat);
-				}
+			if (idx && idx >= 0) this.patterns.splice(idx, rep, ...opat);
+			else {
+				while (rep--) this.patterns.pop();
+				
+				this.patterns.push(...opat);
 			}
 			
 			return opat;
 		} //reg
+		/**
+		 * Unregister Pattern(s).
+		 * 
+		 * @param [pat] - pattern(s) to unregister
+		 * @returns {Pattern[]} Unregistered Patterns.
+		 */
 		unreg(pat?: Pattern[] | number[] | Pattern | number): Pattern[] {
 			let pats: Pattern[] = [ ];
 			
@@ -141,6 +184,9 @@ export module tt {
 		}
 		*[Symbol.iterator]() {
 			yield* this.patterns;
+		}
+		static [Symbol.hasInstance](ins: any): boolean {
+			return ins instanceof RegExp || ins instanceof TT || ins instanceof Pattern;
 		}
 		
 	} //TT
